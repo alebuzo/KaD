@@ -139,3 +139,46 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: frontend
+---
+# PEER AUTHENTICATION - mTLS mode PERMISSIVE (permite HTTP y mTLS)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: default
+spec:
+  mtls:
+    mode: PERMISSIVE
+
+---
+# AUTHORIZATION POLICY - Solo frontend puede llamar a adservice
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-frontend-to-adservice
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: adservice
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/frontend"]
+    to:
+    - operation:
+        methods: ["POST"]
+        paths: ["/hipstershop.AdService/*"]
+
+---
+# DESTINATION RULE - Enforce mTLS for adservice
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: adservice-mtls
+  namespace: default
+spec:
+  host: adservice
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL
