@@ -71,3 +71,55 @@ Para implementarlo sobre la arquitectura de Online Boutique, con especial énfas
 
 **Fase 3**: Control de acceso servicio a servicio con AuthorizationPolicies Se implementa un modelo de denegación por defecto con permisos explícitos, de forma que únicamente los servicios estrictamente necesarios puedan comunicarse con paymentservice. Esto aplica directamente los pilares de mínimo privilegio y nunca confiar de Zero Trust: incluso si un servicio es comprometido, cualquier llamada no autorizada hacia servicios críticos será rechazada por el destino.
 
+### Manifiestos implementados (checkout → payment)
+
+Se crearon dos manifiestos de Istio en `istio-manifests/` para aplicar zero trust entre `checkoutservice` y `paymentservice`:
+
+| Archivo | Recurso | Propósito |
+|---|---|---|
+| `payment-peer-authentication.yaml` | PeerAuthentication | Habilita mTLS en modo `PERMISSIVE` sobre el workload `paymentservice`. Los servicios con sidecar de Istio (como checkout) se comunican con mTLS automáticamente; otros servicios no se ven bloqueados. |
+| `payment-destination-rule.yaml` | DestinationRule | Hace explícito el uso de `ISTIO_MUTUAL` TLS al comunicarse con `paymentservice`, documentando la intención de seguridad. |
+
+**Aplicar los manifiestos:**
+```bash
+kubectl apply -f istio-manifests/payment-peer-authentication.yaml
+kubectl apply -f istio-manifests/payment-destination-rule.yaml
+```
+
+### Validación de mTLS (Zero Trust checkout → payment)
+
+**Verificar mTLS activo en los logs del sidecar de Envoy:**
+```bash
+# Ver logs del sidecar istio-proxy del pod de paymentservice:
+kubectl logs <paymentservice-pod> -c istio-proxy | grep checkoutservice
+# Buscar: downstream_peer_subject="spiffe://cluster.local/ns/<namespace>/sa/checkoutservice"
+```
+
+**Verificar vía métricas de Istio (Prometheus):**
+```promql
+istio_requests_total{
+  destination_service="paymentservice.<namespace>.svc.cluster.local",
+  connection_security_policy="mutual_tls"
+}
+```
+Si `connection_security_policy="mutual_tls"` aparece para las solicitudes checkout→payment, el canal está cifrado y autenticado.
+
+**Inspección con istioctl:**
+```bash
+# Verificar configuración de mTLS:
+istioctl authn tls-check <paymentservice-pod> paymentservice.<namespace>.svc.cluster.local
+
+# Ver certificados del proxy:
+istioctl proxy-config secret <paymentservice-pod>
+
+# Ver configuración TLS del cluster destino:
+istioctl proxy-config cluster <checkoutservice-pod> --fqdn paymentservice.<namespace>.svc.cluster.local -o json | grep transportSocket
+```
+
+**Prueba de permisividad (otros servicios no bloqueados):**
+```bash
+# Desde otro pod (e.g., frontend), verificar que aún puede llamar a payment:
+kubectl exec <frontend-pod> -c server -- grpcurl -plaintext paymentservice:50051 grpc.health.v1.Health/Check
+# Debe funcionar (modo PERMISSIVE permite plaintext)
+```
+
