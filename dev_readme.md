@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Este documento registra el proceso paso a paso de la implementación de un modelo **Zero Trust** sobre la arquitectura de microservicios de Online Boutique, ejecutada localmente con **Minikube**. El enfoque inicial se centra en asegurar la comunicación entre `checkoutservice` y `emailservice`, donde solo checkout tiene permitido invocar a email.
+Este documento registra el proceso paso a paso de la implementación de un modelo **Zero Trust** sobre la arquitectura de microservicios de Online Boutique, ejecutada localmente con **Minikube**. Se aplica mTLS estricto y AuthorizationPolicies para controlar la comunicación entre todos los servicios del sistema.
 
 ## ¿Qué es Zero Trust?
 
@@ -157,12 +157,12 @@ adservice-xxxxx                          2/2     Running
 currencyservice-xxxxx                    2/2     Running
 ```
 
-### Estado después de Fase 1
+### Estado despues de Fase 1
 
 ```
-✅ Fase 1: Instalar Istio + Sidecar Envoy inyectado
-⬜ Fase 2: mTLS estricto
-⬜ Fase 3: AuthorizationPolicies (checkout → email)
+Fase 1: Instalar Istio + Sidecar Envoy inyectado   (COMPLETADA)
+Fase 2: mTLS estricto                              (PENDIENTE)
+Fase 3: AuthorizationPolicies                      (PENDIENTE)
 ```
 
 En este punto, Istio está instalado y cada pod tiene su proxy Envoy. Sin embargo, el tráfico aún puede ir en texto plano (modo PERMISSIVE por defecto). En la Fase 2 se forzará mTLS estricto.
@@ -186,8 +186,8 @@ Esto elimina la posibilidad de que un atacante intercepte tráfico entre servici
 En TLS normal (como HTTPS), solo el **servidor** presenta un certificado para probar su identidad. En **mutual TLS (mTLS)**, **ambas partes** presentan certificados:
 
 ```
-checkoutservice ──(certificado de checkout)──→ emailservice
-checkoutservice ←──(certificado de email)─── emailservice
+checkoutservice --(certificado de checkout)--> emailservice
+checkoutservice <--(certificado de email)--- emailservice
 ```
 
 Istio maneja esto automáticamente: istiod actúa como una Autoridad Certificadora (CA) interna que emite y rota certificados para cada pod.
@@ -248,45 +248,45 @@ istioctl x describe pod $(kubectl get pod -l app=emailservice -o jsonpath='{.ite
 
 **¿Qué hace?** Consulta a Istio el estado de seguridad del pod de emailservice. Debe reportar que el pod está aplicando mTLS.
 
-### Estado después de Fase 2
+### Estado despues de Fase 2
 
 ```
-✅ Fase 1: Instalar Istio + Sidecar Envoy inyectado
-✅ Fase 2: mTLS estricto activado
-⬜ Fase 3: AuthorizationPolicies (checkout → email)
+Fase 1: Instalar Istio + Sidecar Envoy inyectado   (COMPLETADA)
+Fase 2: mTLS estricto activado                     (COMPLETADA)
+Fase 3: AuthorizationPolicies                      (PENDIENTE)
 ```
 
 En este punto, todo el tráfico entre pods está cifrado y autenticado. Sin embargo, **cualquier servicio** dentro de la malla aún puede comunicarse con cualquier otro. En la Fase 3 se restringirá quién puede hablar con quién.
 
 ---
 
-## Fase 3: AuthorizationPolicies - Control de Acceso (checkout → email)
+## Fase 3: AuthorizationPolicies - Control de Acceso
 
-### ¿Qué se logra en esta fase?
+### Que se logra en esta fase?
 
-Se implementa el principio de **mínimo privilegio**: solo `checkoutservice` puede comunicarse con `emailservice`. Cualquier otro servicio que intente contactar a emailservice será **denegado automáticamente**.
+Se implementa el principio de **minimo privilegio** en todos los servicios del sistema: cada servicio solo puede ser contactado por los servicios que legitimamente necesitan comunicarse con el. Cualquier otro servicio que intente contactarlo sera **denegado automaticamente**.
 
-Esto es el corazón de Zero Trust: **nunca confiar, siempre verificar**. Aunque un servicio esté dentro del clúster y tenga mTLS activo, si no tiene permiso explícito, no puede comunicarse.
+Esto es el corazon de Zero Trust: **nunca confiar, siempre verificar**. Aunque un servicio este dentro del cluster y tenga mTLS activo, si no tiene permiso explicito, no puede comunicarse.
 
-### ¿Cómo funciona?
+### Como funciona?
 
-Istio usa **AuthorizationPolicy** para definir reglas de acceso. Cuando NO existen políticas, todo está permitido. Pero cuando se aplica una política con `action: ALLOW` a un servicio, se activa un modo de **denegación implícita**: todo lo que no esté explícitamente permitido queda bloqueado.
+Istio usa **AuthorizationPolicy** para definir reglas de acceso. Cuando NO existen politicas, todo esta permitido. Pero cuando se aplica una politica con `action: ALLOW` a un servicio, se activa un modo de **denegacion implicita**: todo lo que no este explicitamente permitido queda bloqueado.
 
 ```
 ANTES (sin AuthorizationPolicy):
-  frontend ──→ emailservice        ✅ permitido
-  checkoutservice ──→ emailservice ✅ permitido
-  adservice ──→ emailservice       ✅ permitido
-  (cualquiera) ──→ emailservice    ✅ permitido
+  frontend --> emailservice        PERMITIDO
+  checkoutservice --> emailservice PERMITIDO
+  adservice --> emailservice       PERMITIDO
+  (cualquiera) --> emailservice    PERMITIDO
 
-DESPUÉS (con AuthorizationPolicy):
-  frontend ──→ emailservice        ❌ DENEGADO
-  checkoutservice ──→ emailservice ✅ PERMITIDO
-  adservice ──→ emailservice       ❌ DENEGADO
-  (cualquiera) ──→ emailservice    ❌ DENEGADO
+DESPUES (con AuthorizationPolicy):
+  frontend --> emailservice        DENEGADO
+  checkoutservice --> emailservice PERMITIDO
+  adservice --> emailservice       DENEGADO
+  (cualquiera) --> emailservice    DENEGADO
 ```
 
-### ¿Cómo identifica Istio a cada servicio?
+### Como identifica Istio a cada servicio?
 
 Istio identifica los servicios mediante su **Service Account** de Kubernetes. Cada pod tiene un service account asociado, y cuando mTLS está activo, Istio incluye la identidad del service account en el certificado. Así sabe exactamente quién está haciendo la solicitud.
 
@@ -300,9 +300,25 @@ Para checkoutservice:
 cluster.local/ns/default/sa/checkoutservice
 ```
 
-### Paso 1: Crear el archivo AuthorizationPolicy
+### Paso 1: Crear los archivos AuthorizationPolicy
 
-Se creó el archivo `istio-manifests/authz-emailservice.yaml`:
+Se creo un archivo por cada servicio a proteger en la carpeta `istio-manifests/`:
+
+| Archivo | Servicio protegido | Origenes permitidos |
+|---------|-------------------|---------------------|
+| `authz-emailservice.yaml` | emailservice | checkoutservice |
+| `authz-paymentservice.yaml` | paymentservice | checkoutservice |
+| `authz-checkoutservice.yaml` | checkoutservice | frontend |
+| `authz-cartservice.yaml` | cartservice | frontend, checkoutservice |
+| `authz-shippingservice.yaml` | shippingservice | frontend, checkoutservice |
+| `authz-currencyservice.yaml` | currencyservice | frontend, checkoutservice |
+| `authz-productcatalogservice.yaml` | productcatalogservice | frontend, checkoutservice, recommendationservice |
+| `authz-recommendationservice.yaml` | recommendationservice | frontend |
+| `authz-adservice.yaml` | adservice | frontend |
+| `authz-redis-cart.yaml` | redis-cart | cartservice |
+| `authz-frontend.yaml` | frontend | loadgenerator, trafico externo |
+
+Ejemplo de estructura (emailservice):
 
 ```yaml
 apiVersion: security.istio.io/v1beta1
@@ -321,32 +337,43 @@ spec:
         principals: ["cluster.local/ns/default/sa/checkoutservice"]
 ```
 
-**Explicación del manifiesto:**
-- `selector.matchLabels.app: emailservice`: Esta política se aplica **solo** a los pods con label `app: emailservice`.
-- `action: ALLOW`: Define una regla de permiso. Al existir una regla ALLOW, todo lo demás queda **implícitamente denegado**.
-- `rules.from.source.principals`: Lista de identidades (service accounts) que tienen permiso de comunicarse con emailservice. Solo `checkoutservice` está en la lista.
+**Explicacion del manifiesto:**
+- `selector.matchLabels.app: emailservice`: Esta politica se aplica **solo** a los pods con label `app: emailservice`.
+- `action: ALLOW`: Define una regla de permiso. Al existir una regla ALLOW, todo lo demas queda **implicitamente denegado**.
+- `rules.from.source.principals`: Lista de identidades (service accounts) que tienen permiso de comunicarse con el servicio. Solo los listados pueden acceder.
 
-### Paso 2: Aplicar la política
+### Paso 2: Aplicar las politicas
 
 ```bash
-kubectl apply -f ./istio-manifests/authz-emailservice.yaml
+# Aplicar todas las AuthorizationPolicies de una vez
+kubectl apply -f ./istio-manifests/
 ```
 
-**¿Qué hace?** Aplica la política de autorización. A partir de este momento, solo los pods con el service account `checkoutservice` pueden enviar tráfico a `emailservice`.
+**Que hace?** Aplica todas las politicas de autorizacion del directorio. A partir de este momento, cada servicio solo acepta trafico de los origenes permitidos.
 
-### Paso 3: Verificar que la política está activa
+### Paso 3: Verificar que las politicas estan activas
 
 ```bash
 kubectl get authorizationpolicy
 ```
 
-**¿Qué hace?** Lista las políticas de autorización aplicadas. Se espera ver:
+**Que hace?** Lista las politicas de autorizacion aplicadas. Se espera ver:
 ```
-NAME                               AGE
-emailservice-allow-checkout-only   Xs
+NAME                                                        AGE
+emailservice-allow-checkout-only                            Xs
+paymentservice-allow-checkout-only                          Xs
+checkoutservice-allow-frontend-only                         Xs
+cartservice-allow-frontend-checkout                         Xs
+shippingservice-allow-frontend-checkout                     Xs
+currencyservice-allow-frontend-checkout                     Xs
+productcatalogservice-allow-frontend-checkout-recommendation Xs
+recommendationservice-allow-frontend-only                   Xs
+adservice-allow-frontend-only                               Xs
+redis-cart-allow-cartservice-only                            Xs
+frontend-allow-loadgenerator-and-external                   Xs
 ```
 
-### Paso 4: Probar que el flujo legítimo funciona
+### Paso 4: Probar que el flujo legitimo funciona
 
 Acceder al frontend y completar una compra:
 
@@ -357,16 +384,19 @@ kubectl port-forward svc/frontend 8080:80
 1. Abrir `http://localhost:8080`
 2. Agregar un producto al carrito
 3. Hacer checkout (completar la compra)
-4. La compra debe completarse exitosamente → checkout pudo llamar a email ✅
+4. La compra debe completarse exitosamente --> checkout pudo llamar a email, payment, shipping, etc.
 
-### Paso 5: Verificar que otros servicios NO pueden contactar a emailservice
+### Paso 5: Verificar que otros servicios NO pueden contactar servicios no autorizados
 
 ```bash
-# Intentar llamar a emailservice desde frontend (debería ser DENEGADO)
-kubectl exec $(kubectl get pod -l app=frontend -o jsonpath='{.items[0].metadata.name}') -c server -- wget -qO- --timeout=3 http://emailservice:5000 2>&1 || echo "CONEXIÓN DENEGADA ✅"
+# Intentar llamar a emailservice desde frontend (deberia ser DENEGADO)
+kubectl exec $(kubectl get pod -l app=frontend -o jsonpath='{.items[0].metadata.name}') -c server -- wget -qO- --timeout=3 http://emailservice:5000 2>&1 || echo "CONEXION DENEGADA"
+
+# Intentar llamar a paymentservice desde adservice (deberia ser DENEGADO)
+kubectl exec $(kubectl get pod -l app=adservice -o jsonpath='{.items[0].metadata.name}') -c server -- wget -qO- --timeout=3 http://paymentservice:50051 2>&1 || echo "CONEXION DENEGADA"
 ```
 
-**¿Qué hace?** Intenta hacer una solicitud HTTP desde el pod del frontend hacia emailservice. Como frontend no está en la lista de principals permitidos, Istio debería denegar la conexión con un error `RBAC: access denied`.
+**Que hace?** Intenta hacer solicitudes desde pods no autorizados. Como no estan en la lista de principals permitidos, Istio deniega la conexion con un error `RBAC: access denied`.
 
 ### Paso 6: Verificar logs de Istio (opcional)
 
@@ -375,39 +405,49 @@ kubectl exec $(kubectl get pod -l app=frontend -o jsonpath='{.items[0].metadata.
 kubectl logs $(kubectl get pod -l app=emailservice -o jsonpath='{.items[0].metadata.name}') -c istio-proxy | tail -20
 ```
 
-**¿Qué hace?** Muestra los logs del proxy Envoy de emailservice, donde se pueden ver las conexiones permitidas y denegadas.
+**Que hace?** Muestra los logs del proxy Envoy de emailservice, donde se pueden ver las conexiones permitidas y denegadas.
 
-### Estado después de Fase 3
+### Estado despues de Fase 3
 
 ```
-✅ Fase 1: Instalar Istio + Sidecar Envoy inyectado
-✅ Fase 2: mTLS estricto activado
-✅ Fase 3: AuthorizationPolicy (solo checkout → email)
+Fase 1: Instalar Istio + Sidecar Envoy inyectado   (COMPLETADA)
+Fase 2: mTLS estricto activado                     (COMPLETADA)
+Fase 3: AuthorizationPolicies (todos los servicios) (COMPLETADA)
 ```
 
 ### Resumen de archivos creados para Zero Trust
 
 ```
 istio-manifests/
-├── peer-authentication.yaml       # Fase 2: mTLS estricto
-└── authz-emailservice.yaml        # Fase 3: Solo checkout puede hablar con email
+├── peer-authentication.yaml            # Fase 2: mTLS estricto
+├── authz-emailservice.yaml             # Fase 3: Solo checkout --> email
+├── authz-paymentservice.yaml           # Fase 3: Solo checkout --> payment
+├── authz-checkoutservice.yaml          # Fase 3: Solo frontend --> checkout
+├── authz-cartservice.yaml              # Fase 3: Solo frontend, checkout --> cart
+├── authz-shippingservice.yaml          # Fase 3: Solo frontend, checkout --> shipping
+├── authz-currencyservice.yaml          # Fase 3: Solo frontend, checkout --> currency
+├── authz-productcatalogservice.yaml    # Fase 3: Solo frontend, checkout, recommendation --> productcatalog
+├── authz-recommendationservice.yaml    # Fase 3: Solo frontend --> recommendation
+├── authz-adservice.yaml                # Fase 3: Solo frontend --> ad
+├── authz-redis-cart.yaml               # Fase 3: Solo cartservice --> redis
+└── authz-frontend.yaml                 # Fase 3: Solo loadgenerator + trafico externo --> frontend
 ```
 
 ### Comandos para aplicar todo desde cero
 
 ```bash
-# Fase 2
+# Fase 2: mTLS estricto
 kubectl apply -f ./istio-manifests/peer-authentication.yaml
 
-# Fase 3
-kubectl apply -f ./istio-manifests/authz-emailservice.yaml
+# Fase 3: Todas las AuthorizationPolicies
+kubectl apply -f ./istio-manifests/
 ```
 
 ### Comandos para revertir (si algo falla)
 
 ```bash
-# Eliminar la política de autorización
-kubectl delete -f ./istio-manifests/authz-emailservice.yaml
+# Eliminar todas las politicas de autorizacion
+kubectl delete authorizationpolicy --all
 
 # Eliminar mTLS estricto (vuelve a PERMISSIVE)
 kubectl delete -f ./istio-manifests/peer-authentication.yaml

@@ -1,0 +1,31 @@
+# AuthorizationPolicy - Control de acceso a shippingservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo frontend y checkoutservice pueden comunicarse con shippingservice.
+# Cualquier otro servicio que intente contactar a shippingservice será DENEGADO.
+#
+# Flujos permitidos:
+#   frontend --> shippingservice        (PERMITIDO)
+#   checkoutservice --> shippingservice (PERMITIDO)
+#
+# Flujos bloqueados:
+#   adservice --> shippingservice       (DENEGADO)
+#   emailservice --> shippingservice    (DENEGADO)
+#   (cualquier otro) --> shippingservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: shippingservice-allow-frontend-checkout
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: shippingservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+          - "cluster.local/ns/default/sa/frontend"
+          - "cluster.local/ns/default/sa/checkoutservice"

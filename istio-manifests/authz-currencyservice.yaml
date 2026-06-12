@@ -1,0 +1,31 @@
+# AuthorizationPolicy - Control de acceso a currencyservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo frontend y checkoutservice pueden comunicarse con currencyservice.
+# Cualquier otro servicio que intente contactar a currencyservice será DENEGADO.
+#
+# Flujos permitidos:
+#   frontend --> currencyservice        (PERMITIDO)
+#   checkoutservice --> currencyservice (PERMITIDO)
+#
+# Flujos bloqueados:
+#   adservice --> currencyservice       (DENEGADO)
+#   emailservice --> currencyservice    (DENEGADO)
+#   (cualquier otro) --> currencyservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: currencyservice-allow-frontend-checkout
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: currencyservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+          - "cluster.local/ns/default/sa/frontend"
+          - "cluster.local/ns/default/sa/checkoutservice"

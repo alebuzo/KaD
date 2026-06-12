@@ -5,13 +5,13 @@
 # Cualquier otro servicio que intente contactar a emailservice será DENEGADO.
 #
 # Flujo permitido:
-#   checkoutservice ──→ emailservice  ✅
+#   checkoutservice --> emailservice  (PERMITIDO)
 #
 # Flujos bloqueados:
-#   frontend ──→ emailservice         ❌
-#   adservice ──→ emailservice        ❌
-#   paymentservice ──→ emailservice   ❌
-#   (cualquier otro) ──→ emailservice ❌
+#   frontend --> emailservice         (DENEGADO)
+#   adservice --> emailservice        (DENEGADO)
+#   paymentservice --> emailservice   (DENEGADO)
+#   (cualquier otro) --> emailservice (DENEGADO)
 ---
 apiVersion: security.istio.io/v1beta1
 kind: AuthorizationPolicy
