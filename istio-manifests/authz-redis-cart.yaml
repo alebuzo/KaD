@@ -1,0 +1,28 @@
+# AuthorizationPolicy - Control de acceso a redis-cart
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo cartservice puede comunicarse con redis-cart.
+# Cualquier otro servicio que intente contactar a redis-cart será DENEGADO.
+#
+# Flujo permitido:
+#   cartservice --> redis-cart  (PERMITIDO)
+#
+# Flujos bloqueados:
+#   frontend --> redis-cart           (DENEGADO)
+#   checkoutservice --> redis-cart    (DENEGADO)
+#   (cualquier otro) --> redis-cart   (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redis-cart-allow-cartservice-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: redis-cart
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/cartservice"]

@@ -1,0 +1,11 @@
+# PeerAuthentication - Fase 2: mTLS Estricto
+# Este recurso le dice a Istio que EXIJA mTLS en todo el namespace default.
+# Cualquier comunicación en texto plano será rechazada.
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: default
+spec:
+  mtls:
+    mode: STRICT

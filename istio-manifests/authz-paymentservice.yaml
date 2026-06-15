@@ -1,0 +1,28 @@
+# AuthorizationPolicy - Control de acceso a paymentservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo checkoutservice puede comunicarse con paymentservice.
+# Cualquier otro servicio que intente contactar a paymentservice será DENEGADO.
+#
+# Flujo permitido:
+#   checkoutservice --> paymentservice  (PERMITIDO)
+#
+# Flujos bloqueados:
+#   frontend --> paymentservice         (DENEGADO)
+#   emailservice --> paymentservice     (DENEGADO)
+#   (cualquier otro) --> paymentservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: paymentservice-allow-checkout-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: paymentservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/checkoutservice"]

@@ -1,0 +1,33 @@
+# AuthorizationPolicy - Control de acceso a productcatalogservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo frontend, checkoutservice y recommendationservice pueden comunicarse con productcatalogservice.
+# Cualquier otro servicio que intente contactar a productcatalogservice será DENEGADO.
+#
+# Flujos permitidos:
+#   frontend --> productcatalogservice              (PERMITIDO)
+#   checkoutservice --> productcatalogservice       (PERMITIDO)
+#   recommendationservice --> productcatalogservice (PERMITIDO)
+#
+# Flujos bloqueados:
+#   adservice --> productcatalogservice       (DENEGADO)
+#   emailservice --> productcatalogservice    (DENEGADO)
+#   (cualquier otro) --> productcatalogservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: productcatalogservice-allow-frontend-checkout-recommendation
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: productcatalogservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals:
+          - "cluster.local/ns/default/sa/frontend"
+          - "cluster.local/ns/default/sa/checkoutservice"
+          - "cluster.local/ns/default/sa/recommendationservice"

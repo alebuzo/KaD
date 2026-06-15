@@ -1,0 +1,28 @@
+# AuthorizationPolicy - Control de acceso a recommendationservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo frontend puede comunicarse con recommendationservice.
+# Cualquier otro servicio que intente contactar a recommendationservice será DENEGADO.
+#
+# Flujo permitido:
+#   frontend --> recommendationservice  (PERMITIDO)
+#
+# Flujos bloqueados:
+#   checkoutservice --> recommendationservice  (DENEGADO)
+#   adservice --> recommendationservice        (DENEGADO)
+#   (cualquier otro) --> recommendationservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: recommendationservice-allow-frontend-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: recommendationservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/frontend"]

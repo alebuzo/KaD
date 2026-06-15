@@ -1,0 +1,28 @@
+# AuthorizationPolicy - Control de acceso a checkoutservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo frontend puede comunicarse con checkoutservice.
+# Cualquier otro servicio que intente contactar a checkoutservice será DENEGADO.
+#
+# Flujo permitido:
+#   frontend --> checkoutservice  (PERMITIDO)
+#
+# Flujos bloqueados:
+#   adservice --> checkoutservice        (DENEGADO)
+#   paymentservice --> checkoutservice   (DENEGADO)
+#   (cualquier otro) --> checkoutservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: checkoutservice-allow-frontend-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: checkoutservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/frontend"]

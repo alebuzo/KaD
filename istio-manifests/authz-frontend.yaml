@@ -1,0 +1,37 @@
+# AuthorizationPolicy - Control de acceso a frontend
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo loadgenerator (dentro de la malla) y tráfico externo (usuarios via port-forward)
+# pueden comunicarse con frontend.
+#
+# Flujos permitidos:
+#   User (externo via port-forward) --> frontend  (PERMITIDO)
+#   loadgenerator --> frontend                    (PERMITIDO)
+#
+# Flujos bloqueados:
+#   checkoutservice --> frontend   (DENEGADO)
+#   emailservice --> frontend      (DENEGADO)
+#   (cualquier otro) --> frontend  (DENEGADO)
+#
+# NOTA: El tráfico externo (kubectl port-forward / navegador) no tiene un principal
+# de Istio, por lo que se permite con notRequestPrincipals (sin identidad de malla).
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: frontend-allow-loadgenerator-and-external
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: ALLOW
+  rules:
+  # Permitir tráfico desde loadgenerator (dentro de la malla)
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/loadgenerator"]
+  # Permitir tráfico externo (usuarios via port-forward, sin identidad de malla)
+  - from:
+    - source:
+        notPrincipals: ["*"]

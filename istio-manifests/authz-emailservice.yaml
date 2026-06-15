@@ -1,0 +1,29 @@
+# AuthorizationPolicy - Fase 3: Control de acceso a emailservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo checkoutservice puede comunicarse con emailservice.
+# Cualquier otro servicio que intente contactar a emailservice será DENEGADO.
+#
+# Flujo permitido:
+#   checkoutservice --> emailservice  (PERMITIDO)
+#
+# Flujos bloqueados:
+#   frontend --> emailservice         (DENEGADO)
+#   adservice --> emailservice        (DENEGADO)
+#   paymentservice --> emailservice   (DENEGADO)
+#   (cualquier otro) --> emailservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: emailservice-allow-checkout-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: emailservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/checkoutservice"]

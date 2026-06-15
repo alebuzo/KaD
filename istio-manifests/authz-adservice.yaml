@@ -1,0 +1,28 @@
+# AuthorizationPolicy - Control de acceso a adservice
+#
+# Esta política implementa el principio de MÍNIMO PRIVILEGIO:
+# Solo frontend puede comunicarse con adservice.
+# Cualquier otro servicio que intente contactar a adservice será DENEGADO.
+#
+# Flujo permitido:
+#   frontend --> adservice  (PERMITIDO)
+#
+# Flujos bloqueados:
+#   checkoutservice --> adservice  (DENEGADO)
+#   emailservice --> adservice     (DENEGADO)
+#   (cualquier otro) --> adservice (DENEGADO)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: adservice-allow-frontend-only
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: adservice
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        principals: ["cluster.local/ns/default/sa/frontend"]
