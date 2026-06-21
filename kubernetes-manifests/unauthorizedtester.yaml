@@ -1,0 +1,80 @@
+# Copyright 2026 Zero Trust Demo
+#
+# Manifiesto de Kubernetes para unauthorized-tester
+# Este microservicio intenta llamar a paymentservice sin autorización
+# y será bloqueado por las AuthorizationPolicies de Istio.
+#
+# PROPÓSITO: Demostrar que Zero Trust funciona correctamente
+# RESULTADO ESPERADO: Las llamadas a paymentservice serán DENEGADAS
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unauthorizedtester
+  labels:
+    app: unauthorizedtester
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unauthorizedtester
+  template:
+    metadata:
+      labels:
+        app: unauthorizedtester
+    spec:
+      # Service Account propio (NO es checkoutservice, por lo tanto no tiene permiso)
+      serviceAccountName: unauthorizedtester
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: server
+        image: unauthorizedtester:latest
+        imagePullPolicy: Never  # Usar imagen local de Minikube
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PORT
+          value: "8080"
+        - name: PAYMENT_SERVICE_ADDR
+          value: "paymentservice:50051"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unauthorizedtester
+  labels:
+    app: unauthorizedtester
+spec:
+  type: ClusterIP
+  selector:
+    app: unauthorizedtester
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: unauthorizedtester
+  labels:
+    app: unauthorizedtester
